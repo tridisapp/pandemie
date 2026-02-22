@@ -14,8 +14,11 @@ Config.MaxInfectPerTick = 3
 -- Timers (secondes)
 Config.IncubationMin = 60
 Config.IncubationMax = 180
-Config.SickDurationMin = 240
-Config.SickDurationMax = 480
+Config.LightSickDurationMin = 120
+Config.LightSickDurationMax = 240
+Config.SickDurationMin = 180
+Config.SickDurationMax = 300
+Config.SevereDurationSeconds = 600 -- niveau 4: mort au bout de 10 minutes
 Config.ImmunitySeconds = 300
 
 -- Réduction de chance via protections (items)
