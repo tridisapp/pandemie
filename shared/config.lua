@@ -26,6 +26,10 @@ Config.GelReduction  = 0.35
 Config.SymptomTickMin = 8
 Config.SymptomTickMax = 18
 Config.CamShake = 0.08
+Config.CoughAnimDurationMs = 3000
+
+-- Maladie
+Config.AutoHeal = false -- false = impossible de guérir automatiquement
 
 -- Admin / permissions
 Config.AdminGroups = { 'admin', 'superadmin' } -- ESX group
