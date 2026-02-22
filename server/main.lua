@@ -160,8 +160,15 @@ local function tickStateMachine()
           setStatusByIdentifier(identifier, 'sick', rand(Config.SickDurationMin, Config.SickDurationMax))
           TriggerClientEvent('esx:showNotification', src, '~r~Tu es malade.')
         elseif st.status == 'sick' and st.untilTs > 0 and now() >= st.untilTs then
-          setStatusByIdentifier(identifier, 'immune', Config.ImmunitySeconds)
-          TriggerClientEvent('esx:showNotification', src, '~g~Tu es guéri (immunité temporaire).')
+          if Config.AutoHeal then
+            setStatusByIdentifier(identifier, 'immune', Config.ImmunitySeconds)
+            TriggerClientEvent('esx:showNotification', src, '~g~Tu es guéri (immunité temporaire).')
+          else
+            -- on maintient le statut malade tant qu'aucun soin externe n'est appliqué
+            st.untilTs = 0
+            saveState(identifier)
+            syncToClient(src, identifier)
+          end
         elseif st.status == 'immune' and st.untilTs > 0 and now() >= st.untilTs then
           setStatusByIdentifier(identifier, 'healthy', nil)
           TriggerClientEvent('esx:showNotification', src, '~b~Tu es en bonne santé.')
