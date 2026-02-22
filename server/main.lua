@@ -157,18 +157,18 @@ local function tickStateMachine()
       else
         local st = stateCache[identifier]
         if st.status == 'incubating' and st.untilTs > 0 and now() >= st.untilTs then
+          setStatusByIdentifier(identifier, 'sick_light', rand(Config.LightSickDurationMin, Config.LightSickDurationMax))
+          TriggerClientEvent('esx:showNotification', src, '~o~Niveau 2: légèrement malade, tu es contagieux.')
+        elseif st.status == 'sick_light' and st.untilTs > 0 and now() >= st.untilTs then
           setStatusByIdentifier(identifier, 'sick', rand(Config.SickDurationMin, Config.SickDurationMax))
-          TriggerClientEvent('esx:showNotification', src, '~r~Tu es malade.')
+          TriggerClientEvent('esx:showNotification', src, '~r~Niveau 3: malade, tu restes contagieux.')
         elseif st.status == 'sick' and st.untilTs > 0 and now() >= st.untilTs then
-          if Config.AutoHeal then
-            setStatusByIdentifier(identifier, 'immune', Config.ImmunitySeconds)
-            TriggerClientEvent('esx:showNotification', src, '~g~Tu es guéri (immunité temporaire).')
-          else
-            -- on maintient le statut malade tant qu'aucun soin externe n'est appliqué
-            st.untilTs = 0
-            saveState(identifier)
-            syncToClient(src, identifier)
-          end
+          setStatusByIdentifier(identifier, 'severe', Config.SevereDurationSeconds)
+          TriggerClientEvent('esx:showNotification', src, '~r~Niveau 4: gravement malade. Sans soin, mort dans 10 minutes.')
+        elseif st.status == 'severe' and st.untilTs > 0 and now() >= st.untilTs then
+          setStatusByIdentifier(identifier, 'healthy', nil)
+          TriggerClientEvent('esx_infection:killPlayer', src)
+          TriggerClientEvent('esx:showNotification', src, '~r~Tu es mort à cause de l'infection.')
         elseif st.status == 'immune' and st.untilTs > 0 and now() >= st.untilTs then
           setStatusByIdentifier(identifier, 'healthy', nil)
           TriggerClientEvent('esx:showNotification', src, '~b~Tu es en bonne santé.')
@@ -182,6 +182,10 @@ end
 local function dist(a,b)
   local dx=a.x-b.x; local dy=a.y-b.y; local dz=a.z-b.z
   return math.sqrt(dx*dx+dy*dy+dz*dz)
+end
+
+local function isContagiousStatus(status)
+  return status == 'sick_light' or status == 'sick' or status == 'severe'
 end
 
 local function trySpread()
@@ -198,7 +202,7 @@ local function trySpread()
 
   for _,inf in ipairs(players) do
     local stInf = stateCache[inf.id]
-    if stInf and stInf.status == 'sick' then
+    if stInf and isContagiousStatus(stInf.status) then
       local infectedCount = 0
 
       for _,target in ipairs(players) do
