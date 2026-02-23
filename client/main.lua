@@ -9,6 +9,7 @@ local zoneMenuIndex = 1
 local zoneNewRadius = Config.ZoneDefaultRadius or 6.0
 local zoneNewLethalSeconds = Config.ZoneDefaultLethalSeconds or 25
 local zoneSmokeFx = {}
+local wasDead = false
 
 local function isFreemodePed(ped)
   local model = GetEntityModel(ped)
@@ -312,6 +313,22 @@ CreateThread(function()
     Wait(0)
     local level = getInfectionLevel()
     drawTopRightText(getInfectionLabel(level), 0.985, 0.115, 0.33)
+  end
+end)
+
+-- Nettoie l'infection dès que le joueur meurt (peu importe la cause)
+CreateThread(function()
+  while true do
+    Wait(500)
+    local ped = PlayerPedId()
+    local isDead = IsEntityDead(ped)
+
+    if isDead and not wasDead then
+      wasDead = true
+      TriggerServerEvent('esx_infection:playerDied')
+    elseif not isDead and wasDead then
+      wasDead = false
+    end
   end
 end)
 
