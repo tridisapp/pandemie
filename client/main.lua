@@ -140,8 +140,12 @@ local function drawZoneMenuHelp()
 end
 
 local function stopZoneSmoke(idx)
-  if zoneSmokeFx[idx] and zoneSmokeFx[idx].handle and DoesParticleFxLoopedExist(zoneSmokeFx[idx].handle) then
-    StopParticleFxLooped(zoneSmokeFx[idx].handle, false)
+  if zoneSmokeFx[idx] and zoneSmokeFx[idx].handles then
+    for _, handle in ipairs(zoneSmokeFx[idx].handles) do
+      if handle and DoesParticleFxLoopedExist(handle) then
+        StopParticleFxLooped(handle, false)
+      end
+    end
   end
   zoneSmokeFx[idx] = nil
 end
@@ -155,21 +159,58 @@ local function drawContagiousZones()
     local distance = #(pcoords - pos)
 
     if distance <= (Config.ZoneMarkerDistance or 100.0) then
+      local pulse = (math.sin(GetGameTimer() / 300.0) + 1.0) * 0.5
+      local markerR = math.floor(180 + (75 * pulse))
+      local markerG = math.floor(120 + (135 * (1.0 - pulse)))
       DrawMarker(1, zone.x, zone.y, zone.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         zone.radius * 2.0, zone.radius * 2.0, 1.8,
-        30, 220, 60, 100, false, false, 2, false, nil, nil, false)
+        markerR, markerG, 30, 130, false, false, 2, false, nil, nil, false)
     end
 
     if distance <= (Config.ZoneParticleDistance or 60.0) then
-      if not zoneSmokeFx[i] or not zoneSmokeFx[i].handle or not DoesParticleFxLoopedExist(zoneSmokeFx[i].handle) then
+      local hasSmoke = zoneSmokeFx[i] and zoneSmokeFx[i].handles and #zoneSmokeFx[i].handles > 0
+      if hasSmoke then
+        hasSmoke = false
+        for _, handle in ipairs(zoneSmokeFx[i].handles) do
+          if handle and DoesParticleFxLoopedExist(handle) then
+            hasSmoke = true
+            break
+          end
+        end
+      end
+
+      if not hasSmoke then
+        stopZoneSmoke(i)
         RequestNamedPtfxAsset('core')
         while not HasNamedPtfxAssetLoaded('core') do Wait(0) end
-        UseParticleFxAssetNextCall('core')
-        local handle = StartParticleFxLoopedAtCoord('exp_grd_bzgas_smoke', zone.x, zone.y, zone.z + 0.2,
-          0.0, 0.0, 0.0, math.max(0.8, zone.radius / 4.0), false, false, false, false)
-        if handle then
-          SetParticleFxLoopedColour(handle, 0.1, 1.0, 0.2, false)
-          zoneSmokeFx[i] = { handle = handle }
+        local smokeScale = math.max(1.0, (zone.radius / 3.6) * (Config.ZoneSmokeScaleMultiplier or 1.15))
+        local smokeHeight = zone.z + (Config.ZoneSmokeVerticalOffset or 0.25)
+        local smokeColors = Config.ZoneSmokeColors or {
+          { r = 0.15, g = 1.0, b = 0.20 },
+          { r = 1.0, g = 0.05, b = 0.05 }
+        }
+
+        local handles = {}
+        local offsets = {
+          { x = 0.0, y = 0.0 },
+          { x = zone.radius * 0.18, y = -zone.radius * 0.16 }
+        }
+
+        for colorIndex, color in ipairs(smokeColors) do
+          UseParticleFxAssetNextCall('core')
+          local offset = offsets[colorIndex] or offsets[1]
+          local handle = StartParticleFxLoopedAtCoord('exp_grd_bzgas_smoke',
+            zone.x + offset.x, zone.y + offset.y, smokeHeight,
+            0.0, 0.0, 0.0, smokeScale, false, false, false, false)
+
+          if handle then
+            SetParticleFxLoopedColour(handle, color.r or 0.15, color.g or 1.0, color.b or 0.20, false)
+            handles[#handles + 1] = handle
+          end
+        end
+
+        if #handles > 0 then
+          zoneSmokeFx[i] = { handles = handles }
         end
       end
     else

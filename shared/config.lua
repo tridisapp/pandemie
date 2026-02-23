@@ -53,6 +53,12 @@ Config.ZoneMaxRadius = 25.0
 Config.ZoneDefaultLethalSeconds = 25 -- temps continu en zone avant mort
 Config.ZoneParticleDistance = 60.0
 Config.ZoneMarkerDistance = 100.0
+Config.ZoneSmokeScaleMultiplier = 1.15
+Config.ZoneSmokeVerticalOffset = 0.25
+Config.ZoneSmokeColors = {
+  { r = 0.15, g = 1.0, b = 0.20 }, -- vert fluo
+  { r = 1.0,  g = 0.05, b = 0.05 } -- rouge fluo
+}
 
 -- Items ESX (esx_inventory)
 Config.Items = {
