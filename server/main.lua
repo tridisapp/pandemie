@@ -71,6 +71,21 @@ local function setStatusByIdentifier(identifier, status, duration)
   end
 end
 
+local function clearInfectionOnDeath(src)
+  local identifier = getIdentifier(src)
+  if not identifier then return end
+
+  if not stateCache[identifier] then
+    loadState(identifier, function()
+      clearInfectionOnDeath(src)
+    end)
+    return
+  end
+
+  zoneExposure[identifier] = 0
+  setStatusByIdentifier(identifier, 'healthy', nil)
+end
+
 -- ====== Connexion joueur ======
 AddEventHandler('esx:playerLoaded', function(playerId, xPlayer)
   local identifier = xPlayer.getIdentifier()
@@ -88,6 +103,10 @@ end)
 RegisterNetEvent('esx_infection:reportCoords', function(x,y,z)
   local src = source
   coordsCache[src] = vector3(x,y,z)
+end)
+
+RegisterNetEvent('esx_infection:playerDied', function()
+  clearInfectionOnDeath(source)
 end)
 
 -- ====== Protections via items / events ======
