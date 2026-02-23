@@ -3,6 +3,12 @@ local untilTs = 0
 local mask = false
 local gel  = false
 local originalMask = nil
+local contagiousZones = {}
+local zoneMenuOpen = false
+local zoneMenuIndex = 1
+local zoneNewRadius = Config.ZoneDefaultRadius or 6.0
+local zoneNewLethalSeconds = Config.ZoneDefaultLethalSeconds or 25
+local zoneSmokeFx = {}
 
 local function isFreemodePed(ped)
   local model = GetEntityModel(ped)
@@ -103,13 +109,153 @@ RegisterNetEvent('esx_infection:killPlayer', function()
   SetEntityHealth(ped, 0)
 end)
 
+RegisterNetEvent('esx_infection:setZones', function(zones)
+  contagiousZones = zones or {}
+end)
+
+RegisterNetEvent('esx_infection:openZoneMenu', function()
+  zoneMenuOpen = true
+  zoneMenuIndex = 1
+end)
+
+local function drawZoneMenuLine(label, y, selected)
+  local prefix = selected and '~g~>~s~ ' or '  '
+  SetTextFont(4)
+  SetTextScale(0.32, 0.32)
+  SetTextColour(255, 255, 255, 230)
+  SetTextOutline()
+  BeginTextCommandDisplayText('STRING')
+  AddTextComponentSubstringPlayerName(prefix .. label)
+  EndTextCommandDisplayText(0.03, y)
+end
+
+local function drawZoneMenuHelp()
+  SetTextFont(4)
+  SetTextScale(0.3, 0.3)
+  SetTextColour(180, 255, 180, 230)
+  SetTextOutline()
+  BeginTextCommandDisplayText('STRING')
+  AddTextComponentSubstringPlayerName('Menu zones contagieuses (~INPUT_FRONTEND_UP~/~INPUT_FRONTEND_DOWN~, ~INPUT_FRONTEND_ACCEPT~, ~INPUT_FRONTEND_CANCEL~)')
+  EndTextCommandDisplayText(0.03, 0.18)
+end
+
+local function stopZoneSmoke(idx)
+  if zoneSmokeFx[idx] and zoneSmokeFx[idx].handle and DoesParticleFxLoopedExist(zoneSmokeFx[idx].handle) then
+    StopParticleFxLooped(zoneSmokeFx[idx].handle, false)
+  end
+  zoneSmokeFx[idx] = nil
+end
+
+local function drawContagiousZones()
+  local ped = PlayerPedId()
+  local pcoords = GetEntityCoords(ped)
+
+  for i, zone in ipairs(contagiousZones) do
+    local pos = vector3(zone.x + 0.0, zone.y + 0.0, zone.z + 0.0)
+    local distance = #(pcoords - pos)
+
+    if distance <= (Config.ZoneMarkerDistance or 100.0) then
+      DrawMarker(1, zone.x, zone.y, zone.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        zone.radius * 2.0, zone.radius * 2.0, 1.8,
+        30, 220, 60, 100, false, false, 2, false, nil, nil, false)
+    end
+
+    if distance <= (Config.ZoneParticleDistance or 60.0) then
+      if not zoneSmokeFx[i] or not zoneSmokeFx[i].handle or not DoesParticleFxLoopedExist(zoneSmokeFx[i].handle) then
+        RequestNamedPtfxAsset('core')
+        while not HasNamedPtfxAssetLoaded('core') do Wait(0) end
+        UseParticleFxAssetNextCall('core')
+        local handle = StartParticleFxLoopedAtCoord('exp_grd_bzgas_smoke', zone.x, zone.y, zone.z + 0.2,
+          0.0, 0.0, 0.0, math.max(0.8, zone.radius / 4.0), false, false, false, false)
+        if handle then
+          SetParticleFxLoopedColour(handle, 0.1, 1.0, 0.2, false)
+          zoneSmokeFx[i] = { handle = handle }
+        end
+      end
+    else
+      stopZoneSmoke(i)
+    end
+  end
+
+  for idx, _ in pairs(zoneSmokeFx) do
+    if not contagiousZones[idx] then
+      stopZoneSmoke(idx)
+    end
+  end
+end
+
 -- Envoi coords au serveur
 CreateThread(function()
+  TriggerServerEvent('esx_infection:requestZones')
   while true do
     Wait(Config.CoordReportMs)
     local ped = PlayerPedId()
     local c = GetEntityCoords(ped)
     TriggerServerEvent('esx_infection:reportCoords', c.x, c.y, c.z)
+  end
+end)
+
+CreateThread(function()
+  local menuItems = {
+    'Ajouter une zone ici',
+    'Rayon +',
+    'Rayon -',
+    'Temps mortel +5s',
+    'Temps mortel -5s',
+    'Supprimer la zone la plus proche',
+    'Vider toutes les zones',
+    'Fermer'
+  }
+
+  while true do
+    Wait(0)
+    drawContagiousZones()
+
+    if zoneMenuOpen then
+      drawZoneMenuHelp()
+      drawZoneMenuLine(('Nouveau rayon: ~g~%.1fm~s~, mort en ~r~%ss~s~'):format(zoneNewRadius, zoneNewLethalSeconds), 0.21, false)
+
+      for i, label in ipairs(menuItems) do
+        drawZoneMenuLine(label, 0.22 + (i * 0.026), zoneMenuIndex == i)
+      end
+
+      if IsControlJustPressed(0, 172) then -- up
+        zoneMenuIndex = zoneMenuIndex - 1
+        if zoneMenuIndex < 1 then zoneMenuIndex = #menuItems end
+      elseif IsControlJustPressed(0, 173) then -- down
+        zoneMenuIndex = zoneMenuIndex + 1
+        if zoneMenuIndex > #menuItems then zoneMenuIndex = 1 end
+      elseif IsControlJustPressed(0, 177) then -- back
+        zoneMenuOpen = false
+      elseif IsControlJustPressed(0, 191) then -- enter
+        local ped = PlayerPedId()
+        local c = GetEntityCoords(ped)
+
+        if zoneMenuIndex == 1 then
+          TriggerServerEvent('esx_infection:addZone', {
+            x = c.x,
+            y = c.y,
+            z = c.z,
+            radius = zoneNewRadius,
+            lethalSeconds = zoneNewLethalSeconds
+          })
+        elseif zoneMenuIndex == 2 then
+          zoneNewRadius = math.min((Config.ZoneMaxRadius or 25.0), zoneNewRadius + 1.0)
+        elseif zoneMenuIndex == 3 then
+          zoneNewRadius = math.max((Config.ZoneMinRadius or 2.0), zoneNewRadius - 1.0)
+        elseif zoneMenuIndex == 4 then
+          zoneNewLethalSeconds = math.min(300, zoneNewLethalSeconds + 5)
+        elseif zoneMenuIndex == 5 then
+          zoneNewLethalSeconds = math.max(5, zoneNewLethalSeconds - 5)
+        elseif zoneMenuIndex == 6 then
+          TriggerServerEvent('esx_infection:removeNearestZone', { x = c.x, y = c.y, z = c.z })
+        elseif zoneMenuIndex == 7 then
+          TriggerServerEvent('esx_infection:clearZones')
+        elseif zoneMenuIndex == 8 then
+          zoneMenuOpen = false
+        end
+      end
+    end
   end
 end)
 

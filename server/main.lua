@@ -1,5 +1,7 @@
 local coordsCache = {}  -- coordsCache[src] = vector3(...)
 local stateCache  = {}  -- stateCache[identifier] = {status, untilTs, mask, gel}
+local zoneExposure = {} -- zoneExposure[identifier] = elapsed seconds in zone
+local contagiousZones = {}
 
 local function now() return os.time() end
 local function rand(a,b) return math.random(a,b) end
@@ -184,6 +186,40 @@ local function dist(a,b)
   return math.sqrt(dx*dx+dy*dy+dz*dz)
 end
 
+local function copyZones()
+  local out = {}
+  for i, zone in ipairs(contagiousZones) do
+    out[i] = {
+      x = zone.x,
+      y = zone.y,
+      z = zone.z,
+      radius = zone.radius,
+      lethalSeconds = zone.lethalSeconds
+    }
+  end
+  return out
+end
+
+local function broadcastZones(target)
+  if target then
+    TriggerClientEvent('esx_infection:setZones', target, copyZones())
+    return
+  end
+  TriggerClientEvent('esx_infection:setZones', -1, copyZones())
+end
+
+local function sanitizeRadius(radius)
+  local r = tonumber(radius) or Config.ZoneDefaultRadius
+  r = math.max(Config.ZoneMinRadius or 2.0, r)
+  r = math.min(Config.ZoneMaxRadius or 25.0, r)
+  return r
+end
+
+local function sanitizeLethalSeconds(seconds)
+  local s = tonumber(seconds) or Config.ZoneDefaultLethalSeconds or 25
+  return math.max(5, math.floor(s))
+end
+
 local function isContagiousStatus(status)
   return status == 'sick_light' or status == 'sick' or status == 'severe'
 end
@@ -228,6 +264,49 @@ local function trySpread()
   end
 end
 
+local function isInsideZone(pos, zone)
+  return dist(pos, zone) <= zone.radius
+end
+
+local function handleContagiousZones()
+  if not Config.Enabled or #contagiousZones == 0 then return end
+
+  for _, src in ipairs(GetPlayers()) do
+    src = tonumber(src)
+    local identifier = getIdentifier(src)
+    local pos = coordsCache[src]
+    if identifier and pos then
+      local st = stateCache[identifier]
+      if st then
+        local activeZone = nil
+        for _, zone in ipairs(contagiousZones) do
+          if isInsideZone(pos, zone) then
+            activeZone = zone
+            break
+          end
+        end
+
+        if activeZone then
+          if not st.mask and st.status == 'healthy' then
+            setStatusByIdentifier(identifier, 'sick_light', rand(Config.LightSickDurationMin, Config.LightSickDurationMax))
+            TriggerClientEvent('esx:showNotification', src, '~r~Zone contaminée: tu as attrapé le virus instantanément (sans masque).')
+          end
+
+          zoneExposure[identifier] = (zoneExposure[identifier] or 0) + Config.TickSeconds
+          if zoneExposure[identifier] >= (activeZone.lethalSeconds or Config.ZoneDefaultLethalSeconds) then
+            zoneExposure[identifier] = 0
+            setStatusByIdentifier(identifier, 'healthy', nil)
+            TriggerClientEvent('esx_infection:killPlayer', src)
+            TriggerClientEvent('esx:showNotification', src, '~r~Tu es mort après une trop longue exposition en zone contaminée.')
+          end
+        else
+          zoneExposure[identifier] = 0
+        end
+      end
+    end
+  end
+end
+
 -- Tick principal
 CreateThread(function()
   math.randomseed(GetGameTimer())
@@ -235,6 +314,7 @@ CreateThread(function()
     Wait(Config.TickSeconds * 1000)
     tickStateMachine()
     trySpread()
+    handleContagiousZones()
   end
 end)
 
@@ -282,4 +362,89 @@ RegisterCommand(Config.Commands.info, function(src)
   TriggerClientEvent('esx:showNotification', src,
     ('Etat: %s | fin: %s | masque: %s | gel: %s'):format(st.status, tostring(st.untilTs), tostring(st.mask), tostring(st.gel))
   )
+end)
+
+RegisterCommand(Config.Commands.zones, function(src)
+  if src == 0 then return end
+  local xPlayer = ESX.GetPlayerFromId(src)
+  if not isAdmin(xPlayer) then return end
+  TriggerClientEvent('esx_infection:openZoneMenu', src)
+  broadcastZones(src)
+end)
+
+RegisterNetEvent('esx_infection:requestZones', function()
+  broadcastZones(source)
+end)
+
+RegisterNetEvent('esx_infection:addZone', function(payload)
+  local src = source
+  local xPlayer = ESX.GetPlayerFromId(src)
+  if not isAdmin(xPlayer) then return end
+  if type(payload) ~= 'table' then return end
+
+  local x = tonumber(payload.x)
+  local y = tonumber(payload.y)
+  local z = tonumber(payload.z)
+  if not x or not y or not z then return end
+
+  contagiousZones[#contagiousZones + 1] = {
+    x = x,
+    y = y,
+    z = z,
+    radius = sanitizeRadius(payload.radius),
+    lethalSeconds = sanitizeLethalSeconds(payload.lethalSeconds)
+  }
+
+  broadcastZones()
+end)
+
+RegisterNetEvent('esx_infection:removeNearestZone', function(payload)
+  local src = source
+  local xPlayer = ESX.GetPlayerFromId(src)
+  if not isAdmin(xPlayer) then return end
+  if type(payload) ~= 'table' then return end
+
+  local pos = {
+    x = tonumber(payload.x),
+    y = tonumber(payload.y),
+    z = tonumber(payload.z)
+  }
+  if not pos.x or not pos.y or not pos.z then return end
+
+  local nearestIdx = nil
+  local nearestDist = nil
+  for i, zone in ipairs(contagiousZones) do
+    local d = dist(pos, zone)
+    if not nearestDist or d < nearestDist then
+      nearestDist = d
+      nearestIdx = i
+    end
+  end
+
+  if nearestIdx then
+    table.remove(contagiousZones, nearestIdx)
+    broadcastZones()
+  end
+end)
+
+RegisterNetEvent('esx_infection:clearZones', function()
+  local src = source
+  local xPlayer = ESX.GetPlayerFromId(src)
+  if not isAdmin(xPlayer) then return end
+  contagiousZones = {}
+  broadcastZones()
+end)
+
+CreateThread(function()
+  for _, zone in ipairs(Config.ContagiousZones or {}) do
+    if zone.x and zone.y and zone.z then
+      contagiousZones[#contagiousZones + 1] = {
+        x = zone.x,
+        y = zone.y,
+        z = zone.z,
+        radius = sanitizeRadius(zone.radius),
+        lethalSeconds = sanitizeLethalSeconds(zone.lethalSeconds)
+      }
+    end
+  end
 end)

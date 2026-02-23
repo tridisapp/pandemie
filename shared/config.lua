@@ -41,8 +41,18 @@ Config.Commands = {
   stop  = 'infection_stop',
   cure  = 'infection_cure',
   infect= 'infection_infect',
-  info  = 'infection_info'
+  info  = 'infection_info',
+  zones = 'infection_zones'
 }
+
+-- Zones contagieuses dynamiques (gérées en jeu via /infection_zones)
+Config.ContagiousZones = {}
+Config.ZoneDefaultRadius = 6.0
+Config.ZoneMinRadius = 2.0
+Config.ZoneMaxRadius = 25.0
+Config.ZoneDefaultLethalSeconds = 25 -- temps continu en zone avant mort
+Config.ZoneParticleDistance = 60.0
+Config.ZoneMarkerDistance = 100.0
 
 -- Items ESX (esx_inventory)
 Config.Items = {
