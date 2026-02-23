@@ -2,6 +2,44 @@ local status = 'healthy'
 local untilTs = 0
 local mask = false
 local gel  = false
+local originalMask = nil
+
+local function isFreemodePed(ped)
+  local model = GetEntityModel(ped)
+  return model == `mp_m_freemode_01` or model == `mp_f_freemode_01`
+end
+
+local function applySurgicalMask(ped)
+  local model = GetEntityModel(ped)
+  local candidates = Config.SurgicalMaskDrawables and Config.SurgicalMaskDrawables[model]
+  if not candidates or #candidates == 0 then return false end
+
+  local maxDrawables = GetNumberOfPedDrawableVariations(ped, 1)
+  if maxDrawables <= 0 then return false end
+
+  if not originalMask then
+    originalMask = {
+      drawable = GetPedDrawableVariation(ped, 1),
+      texture = GetPedTextureVariation(ped, 1)
+    }
+  end
+
+  for _, drawable in ipairs(candidates) do
+    if drawable >= 0 and drawable < maxDrawables then
+      SetPedComponentVariation(ped, 1, drawable, Config.SurgicalMaskTexture or 0, 0)
+      return true
+    end
+  end
+
+  return false
+end
+
+local function removeSurgicalMask(ped)
+  if originalMask then
+    SetPedComponentVariation(ped, 1, originalMask.drawable, originalMask.texture, 0)
+    originalMask = nil
+  end
+end
 
 local function getInfectionLevel()
   if status == 'severe' then return 4 end
@@ -49,6 +87,15 @@ end)
 RegisterNetEvent('esx_infection:setProtection', function(m, g)
   mask = m == true
   gel  = g == true
+
+  local ped = PlayerPedId()
+  if isFreemodePed(ped) then
+    if mask then
+      applySurgicalMask(ped)
+    else
+      removeSurgicalMask(ped)
+    end
+  end
 end)
 
 RegisterNetEvent('esx_infection:killPlayer', function()

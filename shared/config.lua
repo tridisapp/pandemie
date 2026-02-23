@@ -49,3 +49,11 @@ Config.Items = {
   mask = 'mask',
   gel  = 'gel'
 }
+
+-- Apparence du masque chirurgical (composant vêtements 1)
+-- Les IDs peuvent varier selon votre pack vêtements : ajustez si besoin.
+Config.SurgicalMaskDrawables = {
+  [`mp_m_freemode_01`] = { 126, 51, 110 },
+  [`mp_f_freemode_01`] = { 129, 46, 105 }
+}
+Config.SurgicalMaskTexture = 0
