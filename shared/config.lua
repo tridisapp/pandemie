@@ -56,8 +56,7 @@ Config.ZoneMarkerDistance = 100.0
 Config.ZoneSmokeScaleMultiplier = 1.15
 Config.ZoneSmokeVerticalOffset = 0.25
 Config.ZoneSmokeColors = {
-  { r = 0.15, g = 1.0, b = 0.20 }, -- vert fluo
-  { r = 1.0,  g = 0.05, b = 0.05 } -- rouge fluo
+  { r = 0.15, g = 1.0, b = 0.20 } -- vert fluo
 }
 
 -- Items ESX (esx_inventory)

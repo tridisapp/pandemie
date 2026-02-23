@@ -160,11 +160,18 @@ local function drawContagiousZones()
 
     if distance <= (Config.ZoneMarkerDistance or 100.0) then
       local pulse = (math.sin(GetGameTimer() / 300.0) + 1.0) * 0.5
-      local markerR = math.floor(180 + (75 * pulse))
-      local markerG = math.floor(120 + (135 * (1.0 - pulse)))
+      local markerG = math.floor(200 + (55 * pulse))
+      local markerA = math.floor(120 + (60 * pulse))
+
+      -- Anneau visible autour de la zone contagieuse
+      DrawMarker(28, zone.x, zone.y, zone.z + 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        zone.radius * 2.0, zone.radius * 2.0, 2.0,
+        20, markerG, 20, markerA, false, false, 2, false, nil, nil, false)
+
+      -- Léger remplissage pour mieux repérer la zone de loin
       DrawMarker(1, zone.x, zone.y, zone.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        zone.radius * 2.0, zone.radius * 2.0, 1.8,
-        markerR, markerG, 30, 130, false, false, 2, false, nil, nil, false)
+        zone.radius * 2.0, zone.radius * 2.0, 1.2,
+        20, markerG, 20, 80, false, false, 2, false, nil, nil, false)
     end
 
     if distance <= (Config.ZoneParticleDistance or 60.0) then
@@ -186,8 +193,7 @@ local function drawContagiousZones()
         local smokeScale = math.max(1.0, (zone.radius / 3.6) * (Config.ZoneSmokeScaleMultiplier or 1.15))
         local smokeHeight = zone.z + (Config.ZoneSmokeVerticalOffset or 0.25)
         local smokeColors = Config.ZoneSmokeColors or {
-          { r = 0.15, g = 1.0, b = 0.20 },
-          { r = 1.0, g = 0.05, b = 0.05 }
+          { r = 0.15, g = 1.0, b = 0.20 }
         }
 
         local handles = {}
